@@ -17,34 +17,78 @@ public class Commutator : MonoBehaviour
 
     public AudioClip levelup;
     AudioSource audio;
+    private LevelManager levelManager;
 
     void Start()
     {
         audio = GetComponent<AudioSource>();
-        Time.timeScale = 1f; // Убедимся, что игра идёт при старте
+        levelManager = GetComponent<LevelManager>();
+        Time.timeScale = 1f;
     }
 
     void Update()
     {
-        YourText.text = count.ToString();
+        if (YourText != null)
+        {
+            YourText.text = count.ToString();
+        }
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (Menu.activeSelf)
+            {
+                start();
+            }
+            else if (GameOver.activeSelf)
+            {
+                reset();
+            }
+        }
     }
 
     public void start()
     {
-        Player.GetComponent<Rigidbody2D>().gravityScale = 1.0f;
-        Game.SetActive(true);
-        Menu.SetActive(false);
-        Time.timeScale = 1f; // Запускаем игру
+        if (Player != null)
+        {
+            Rigidbody2D rb = Player.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.gravityScale = 1.0f;
+            }
+        }
+
+        if (Game != null)
+        {
+            Game.SetActive(true);
+        }
+
+        if (Menu != null)
+        {
+            Menu.SetActive(false);
+        }
+
+        Debug.Log("[Commutator] Game started by Space.");
+
+        if (levelManager != null)
+        {
+            levelManager.StartCurrentLevel();
+        }
+
+        Time.timeScale = 1f;
     }
 
     public void reset()
     {
+        Debug.Log("[Commutator] Reset scene.");
         SceneManager.LoadScene(0);
-        Time.timeScale = 1f; // Сбрасываем время при рестарте
+        Time.timeScale = 1f;
     }
 
     public void levelUp()
     {
-        audio.PlayOneShot(levelup);
+        if (audio != null && levelup != null)
+        {
+            audio.PlayOneShot(levelup);
+        }
     }
 }

@@ -2,36 +2,59 @@ using UnityEngine;
 
 public class SmoothCameraFollow : MonoBehaviour
 {
-    public Transform target; // the player's transform
-    public float smoothSpeed = 0.3f; // the speed of the camera's movement
-    public Vector3 offset = new Vector3(0, 5, -10); // the camera's offset from the player
-    public float rotationSpeed = 5f; // the speed of the camera's rotation
-    public float rotationDamping = 0.5f; // the damping of the camera's rotation
+    public Transform target;
+    public float smoothSpeed = 8f;
+    public Vector2 offset = new Vector2(6f, 1.5f);
+    public float cameraZ = -10f;
+    public bool followX = true;
+    public bool followY = false;
+    public bool snapOnStart = true;
+    public float orthographicSize = 5f;
 
-    private Transform cameraTransform; // the camera's transform
-    private Quaternion targetRotation; // the target rotation of the camera
+    private Quaternion fixedRotation;
 
     void Start()
     {
-        cameraTransform = transform;
-        targetRotation = cameraTransform.rotation;
+        fixedRotation = Quaternion.identity;
+
+        Camera cam = GetComponent<Camera>();
+        if (cam != null)
+        {
+            cam.orthographic = true;
+            cam.orthographicSize = orthographicSize;
+        }
+
+        transform.rotation = fixedRotation;
+
+        if (snapOnStart && target != null)
+        {
+            transform.position = GetDesiredPosition();
+        }
     }
 
     void LateUpdate()
     {
-        Vector3 targetPosition = target.position + offset;
-        cameraTransform.position = Vector3.Lerp(cameraTransform.position, targetPosition, smoothSpeed * Time.deltaTime);
+        if (target == null)
+        {
+            return;
+        }
 
-        // Rotate the camera to follow the player's rotation
-        float targetAngle = target.eulerAngles.y;
-        float cameraAngle = cameraTransform.eulerAngles.y;
-        float angleDiff = Mathf.DeltaAngle(cameraAngle, targetAngle);
-        cameraTransform.eulerAngles = new Vector3(0, cameraAngle + angleDiff * rotationSpeed * Time.deltaTime, 0);
+        Vector3 desiredPosition = GetDesiredPosition();
 
-        // Damp the camera's rotation to return to its original orientation
-        Quaternion currentRotation = cameraTransform.rotation;
-        cameraTransform.rotation = Quaternion.Lerp(currentRotation, targetRotation, rotationDamping * Time.deltaTime);
+        transform.position = Vector3.Lerp(
+            transform.position,
+            desiredPosition,
+            smoothSpeed * Time.deltaTime
+        );
 
-        cameraTransform.LookAt(target);
+        transform.rotation = fixedRotation;
+    }
+
+    private Vector3 GetDesiredPosition()
+    {
+        float targetX = followX ? target.position.x + offset.x : transform.position.x;
+        float targetY = followY ? target.position.y + offset.y : offset.y;
+
+        return new Vector3(targetX, targetY, cameraZ);
     }
 }
