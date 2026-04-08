@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class Geometrydashcontroller : MonoBehaviour
 {
@@ -18,6 +19,8 @@ public class Geometrydashcontroller : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private Collider2D playerCollider;
     private Material runtimeDeathMaterial;
+    private Material originalSharedMaterial;
+    private readonly List<GameObject> temporarilyHiddenKillers = new List<GameObject>();
     private static readonly int ProgressId = Shader.PropertyToID("_Progress");
 
     void Start()
@@ -29,6 +32,7 @@ public class Geometrydashcontroller : MonoBehaviour
 
         if (spriteRenderer != null)
         {
+            originalSharedMaterial = spriteRenderer.sharedMaterial;
             Shader deathShader = Shader.Find("Custom/SpritePixelDisintegrate");
             if (deathShader != null)
             {
@@ -88,7 +92,7 @@ public class Geometrydashcontroller : MonoBehaviour
 
             if (hitSide)
             {
-                StartCoroutine(DeathSequence(null));
+                StartCoroutine(DeathSequence(collision.gameObject));
                 return;
             }
 
@@ -121,6 +125,8 @@ public class Geometrydashcontroller : MonoBehaviour
             yield break;
         }
 
+        RestoreTemporarilyHiddenKillers();
+
         isDead = true;
 
         rb.linearVelocity = Vector2.zero;
@@ -134,6 +140,13 @@ public class Geometrydashcontroller : MonoBehaviour
         if (fall != null)
         {
             fall.Stop();
+        }
+
+        if (com != null && com.TryUseExtraLife())
+        {
+            yield return StartCoroutine(PlayObjectDissolve(deadlyObject));
+            ReviveAfterExtraLife();
+            yield break;
         }
 
         yield return StartCoroutine(PlayDeathDissolve());
@@ -159,7 +172,6 @@ public class Geometrydashcontroller : MonoBehaviour
             yield break;
         }
 
-        Material previousMaterial = spriteRenderer.material;
         spriteRenderer.material = runtimeDeathMaterial;
         runtimeDeathMaterial.SetFloat(ProgressId, 0f);
 
@@ -174,11 +186,109 @@ public class Geometrydashcontroller : MonoBehaviour
 
         runtimeDeathMaterial.SetFloat(ProgressId, 1f);
         spriteRenderer.enabled = false;
+    }
 
-        if (previousMaterial != null && previousMaterial != runtimeDeathMaterial)
+    private IEnumerator PlayObjectDissolve(GameObject targetObject)
+    {
+        if (targetObject == null)
         {
-            Destroy(previousMaterial);
+            yield return new WaitForSecondsRealtime(deathDuration);
+            yield break;
         }
+
+        if (targetObject.GetComponent<nodeath>() != null || targetObject.GetComponentInParent<nodeath>() != null)
+        {
+            yield return new WaitForSecondsRealtime(deathDuration);
+            yield break;
+        }
+
+        SpriteRenderer targetRenderer = targetObject.GetComponentInChildren<SpriteRenderer>();
+        Collider2D targetCollider = targetObject.GetComponent<Collider2D>();
+
+        if (targetCollider != null)
+        {
+            targetCollider.enabled = false;
+        }
+
+        if (targetRenderer == null)
+        {
+            targetObject.SetActive(false);
+            yield return new WaitForSecondsRealtime(deathDuration);
+            yield break;
+        }
+
+        Shader deathShader = Shader.Find("Custom/SpritePixelDisintegrate");
+        if (deathShader == null)
+        {
+            targetObject.SetActive(false);
+            yield return new WaitForSecondsRealtime(deathDuration);
+            yield break;
+        }
+
+        Material dissolveMaterial = new Material(deathShader);
+        dissolveMaterial.hideFlags = HideFlags.DontSave;
+
+        Material previousMaterial = targetRenderer.sharedMaterial;
+        targetRenderer.material = dissolveMaterial;
+        dissolveMaterial.SetFloat(ProgressId, 0f);
+
+        float elapsed = 0f;
+        while (elapsed < deathDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / deathDuration);
+            dissolveMaterial.SetFloat(ProgressId, progress);
+            yield return null;
+        }
+
+        dissolveMaterial.SetFloat(ProgressId, 1f);
+        targetObject.SetActive(false);
+        temporarilyHiddenKillers.Add(targetObject);
+        targetRenderer.sharedMaterial = previousMaterial;
+        Destroy(dissolveMaterial);
+    }
+
+    private void ReviveAfterExtraLife()
+    {
+        isDead = false;
+        isJumping = false;
+
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.enabled = true;
+            spriteRenderer.sharedMaterial = originalSharedMaterial;
+        }
+
+        if (playerCollider != null)
+        {
+            playerCollider.enabled = true;
+        }
+
+        if (rb != null)
+        {
+            rb.simulated = true;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+
+    public void RestoreTemporarilyHiddenKillers()
+    {
+        if (temporarilyHiddenKillers.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < temporarilyHiddenKillers.Count; i++)
+        {
+            GameObject hiddenKiller = temporarilyHiddenKillers[i];
+            if (hiddenKiller != null)
+            {
+                hiddenKiller.SetActive(true);
+            }
+        }
+
+        temporarilyHiddenKillers.Clear();
     }
 
     private void OnDestroy()

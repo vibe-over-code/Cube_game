@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class LevelManager : MonoBehaviour
@@ -7,10 +8,13 @@ public class LevelManager : MonoBehaviour
     [Header("References")]
     public GameObject player;
     public List<GameObject> levels;
+    public TextMeshProUGUI levelCompleteText;
 
     [Header("Settings")]
     public Vector3 levelOffsetFromPlayer = Vector3.zero;
     public float transitionDelay = 0.1f;
+    public float levelCompleteTextDuration = 1f;
+    public string levelCompleteMessage = "Level Complete!";
 
 #if UNITY_EDITOR
     [Header("Debug (Unity Editor Only)")]
@@ -25,6 +29,7 @@ public class LevelManager : MonoBehaviour
     void Awake()
     {
         DeactivateAllLevels();
+        HideLevelCompleteText();
         currentLevelIndex = PlayerPrefs.GetInt(SAVE_KEY, 0);
 
         if (levels == null || levels.Count == 0)
@@ -85,6 +90,24 @@ public class LevelManager : MonoBehaviour
         StartCoroutine(LoadLevelSequence(currentLevelIndex));
     }
 
+    public void ReloadCurrentLevel()
+    {
+        if (levels == null || levels.Count == 0)
+        {
+            Debug.Log("[LevelManager] ReloadCurrentLevel skipped because levels are not assigned.");
+            return;
+        }
+
+        if (isTransitioning)
+        {
+            Debug.Log("[LevelManager] ReloadCurrentLevel skipped because transition is already running.");
+            return;
+        }
+
+        Debug.Log("[LevelManager] Reloading current level index: " + currentLevelIndex);
+        StartCoroutine(LoadLevelSequence(currentLevelIndex));
+    }
+
     public void FinishLevel()
     {
         if (isTransitioning)
@@ -119,13 +142,22 @@ public class LevelManager : MonoBehaviour
         PlayerPrefs.Save();
 
         Debug.Log("[LevelManager] Level " + finishedLevelIndex + " finished. Saved next level index: " + currentLevelIndex);
-        StartCoroutine(LoadLevelSequence(currentLevelIndex));
+        StartCoroutine(FinishAndLoadNextLevel(currentLevelIndex));
     }
 
     private IEnumerator LoadLevelSequence(int index)
     {
         isTransitioning = true;
         Debug.Log("[LevelManager] Loading level index: " + index);
+
+        if (player != null)
+        {
+            Geometrydashcontroller controller = player.GetComponent<Geometrydashcontroller>();
+            if (controller != null)
+            {
+                controller.RestoreTemporarilyHiddenKillers();
+            }
+        }
 
         DeactivateAllLevels();
 
@@ -147,6 +179,31 @@ public class LevelManager : MonoBehaviour
         }
 
         isTransitioning = false;
+    }
+
+    private IEnumerator FinishAndLoadNextLevel(int nextIndex)
+    {
+        isTransitioning = true;
+
+        if (levelCompleteText != null)
+        {
+            levelCompleteText.text = levelCompleteMessage;
+            levelCompleteText.gameObject.SetActive(true);
+        }
+
+        yield return new WaitForSecondsRealtime(levelCompleteTextDuration);
+
+        HideLevelCompleteText();
+
+        yield return StartCoroutine(LoadLevelSequence(nextIndex));
+    }
+
+    private void HideLevelCompleteText()
+    {
+        if (levelCompleteText != null)
+        {
+            levelCompleteText.gameObject.SetActive(false);
+        }
     }
 
 #if UNITY_EDITOR
