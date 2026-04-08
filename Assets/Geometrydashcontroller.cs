@@ -5,6 +5,7 @@ public class Geometrydashcontroller : MonoBehaviour
 {
     public float jumpForce = 10f;
     public float speed = 10f;
+    public float sideDeathNormalThreshold = 0.6f;
 
     private bool isJumping = false;
     private Rigidbody2D rb;
@@ -12,6 +13,7 @@ public class Geometrydashcontroller : MonoBehaviour
     public ParticleSystem explosion;
 
     private Commutator com;
+    private bool isDead = false;
 
     void Start()
     {
@@ -44,6 +46,11 @@ public class Geometrydashcontroller : MonoBehaviour
 
     void OnCollisionEnter2D(Collision2D collision)
     {
+        if (isDead)
+        {
+            return;
+        }
+
         if (collision != null)
         {
             fall.Play();
@@ -51,6 +58,23 @@ public class Geometrydashcontroller : MonoBehaviour
 
         if (collision.gameObject.CompareTag("Ground"))
         {
+            bool hitSide = false;
+
+            foreach (ContactPoint2D contact in collision.contacts)
+            {
+                if (Mathf.Abs(contact.normal.x) >= sideDeathNormalThreshold)
+                {
+                    hitSide = true;
+                    break;
+                }
+            }
+
+            if (hitSide)
+            {
+                StartCoroutine(DeathSequence(null));
+                return;
+            }
+
             isJumping = false;
         }
     }
@@ -62,6 +86,11 @@ public class Geometrydashcontroller : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        if (isDead)
+        {
+            return;
+        }
+
         if (collision.CompareTag("Deadly"))
         {
             StartCoroutine(DeathSequence(collision.gameObject));
@@ -70,13 +99,23 @@ public class Geometrydashcontroller : MonoBehaviour
 
     private IEnumerator DeathSequence(GameObject deadlyObject)
     {
+        if (isDead)
+        {
+            yield break;
+        }
+
+        isDead = true;
+
         if (explosion != null)
         {
             explosion.transform.position = transform.position;
             explosion.Play();
         }
 
-        Destroy(deadlyObject);
+        if (deadlyObject != null)
+        {
+            Destroy(deadlyObject);
+        }
 
         rb.linearVelocity = Vector2.zero;
         enabled = false;
