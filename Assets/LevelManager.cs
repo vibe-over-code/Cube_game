@@ -14,7 +14,6 @@ public class LevelManager : MonoBehaviour
     public Vector3 levelOffsetFromPlayer = Vector3.zero;
     public float transitionDelay = 0.1f;
     public float levelCompleteTextDuration = 1f;
-    public string levelCompleteMessage = "Level Complete!";
 
 #if UNITY_EDITOR
     [Header("Debug (Unity Editor Only)")]
@@ -193,7 +192,6 @@ public class LevelManager : MonoBehaviour
 
         if (levelCompleteText != null)
         {
-            levelCompleteText.text = levelCompleteMessage;
             levelCompleteText.gameObject.SetActive(true);
         }
 

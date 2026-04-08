@@ -2,8 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using YG;
 
 public class Commutator : MonoBehaviour
 {
@@ -34,6 +36,9 @@ public class Commutator : MonoBehaviour
     private RectTransform livesContainer;
     private readonly List<Image> lifeHeartImages = new List<Image>();
     private Sprite generatedHeartSprite;
+    private bool pendingResetAfterAd;
+    private Coroutine pendingResetRoutine;
+    private float cachedAudioVolume = 1f;
 
     void Start()
     {
@@ -47,8 +52,26 @@ public class Commutator : MonoBehaviour
         Time.timeScale = 1f;
     }
 
+    void OnEnable()
+    {
+#if InterstitialAdv_yg
+        YG2.onCloseInterAdv += HandleInterstitialClosed;
+        YG2.onErrorInterAdv += HandleInterstitialClosed;
+#endif
+    }
+
+    void OnDisable()
+    {
+#if InterstitialAdv_yg
+        YG2.onCloseInterAdv -= HandleInterstitialClosed;
+        YG2.onErrorInterAdv -= HandleInterstitialClosed;
+#endif
+    }
+
     void Update()
     {
+        ClearMenuSelection();
+
         if (YourText != null)
         {
             YourText.text = count.ToString();
@@ -119,6 +142,52 @@ public class Commutator : MonoBehaviour
     public void reset()
     {
         Debug.Log("[Commutator] Reset scene.");
+
+#if InterstitialAdv_yg
+        if (pendingResetRoutine != null || pendingResetAfterAd)
+        {
+            return;
+        }
+
+        pendingResetRoutine = StartCoroutine(ResetWithInterstitialAttempt());
+        return;
+#endif
+
+        CompleteReset();
+    }
+
+#if InterstitialAdv_yg
+    private IEnumerator ResetWithInterstitialAttempt()
+    {
+        float waitDeadline = Time.realtimeSinceStartup + 1f;
+
+        while (Time.realtimeSinceStartup < waitDeadline)
+        {
+            if (!YG2.nowAdsShow && YG2.isTimerAdvCompleted)
+            {
+                pendingResetAfterAd = true;
+                cachedAudioVolume = AudioListener.volume;
+                AudioListener.volume = 0f;
+                Debug.Log("[Commutator] Showing interstitial ad on reset.");
+                YG2.InterstitialAdvShow();
+                pendingResetRoutine = null;
+                yield break;
+            }
+
+            yield return null;
+        }
+
+        Debug.Log("[Commutator] Interstitial ad was not ready within 1 second. Resetting immediately.");
+        pendingResetRoutine = null;
+        CompleteReset();
+    }
+#endif
+
+    private void CompleteReset()
+    {
+        pendingResetAfterAd = false;
+        pendingResetRoutine = null;
+        AudioListener.volume = cachedAudioVolume;
         SceneManager.LoadScene(0);
         Time.timeScale = 1f;
     }
@@ -437,10 +506,49 @@ public class Commutator : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (pendingResetRoutine != null)
+        {
+            StopCoroutine(pendingResetRoutine);
+            pendingResetRoutine = null;
+        }
+
+        AudioListener.volume = cachedAudioVolume;
+
         if (generatedHeartSprite != null)
         {
             Destroy(generatedHeartSprite.texture);
             Destroy(generatedHeartSprite);
+        }
+    }
+
+    private void HandleInterstitialClosed()
+    {
+        pendingResetRoutine = null;
+        AudioListener.volume = cachedAudioVolume;
+
+        if (!pendingResetAfterAd)
+        {
+            return;
+        }
+
+        CompleteReset();
+    }
+
+    private void ClearMenuSelection()
+    {
+        if (Menu == null || !Menu.activeSelf)
+        {
+            return;
+        }
+
+        if (EventSystem.current == null)
+        {
+            return;
+        }
+
+        if (EventSystem.current.currentSelectedGameObject != null)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
         }
     }
 }

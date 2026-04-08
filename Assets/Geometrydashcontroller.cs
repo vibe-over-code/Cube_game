@@ -1,7 +1,6 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using YG;
 
 public class Geometrydashcontroller : MonoBehaviour
 {
@@ -10,6 +9,7 @@ public class Geometrydashcontroller : MonoBehaviour
     public float sideDeathNormalThreshold = 0.6f;
     public float deathDuration = 0.45f;
     public SpriteRenderer targetSpriteRenderer;
+    public Shader deathDissolveShader;
 
     private bool isJumping = false;
     private Rigidbody2D rb;
@@ -34,11 +34,15 @@ public class Geometrydashcontroller : MonoBehaviour
         if (spriteRenderer != null)
         {
             originalSharedMaterial = spriteRenderer.sharedMaterial;
-            Shader deathShader = Shader.Find("Custom/SpritePixelDisintegrate");
+            Shader deathShader = ResolveDeathShader();
             if (deathShader != null)
             {
                 runtimeDeathMaterial = new Material(deathShader);
                 runtimeDeathMaterial.hideFlags = HideFlags.DontSave;
+            }
+            else
+            {
+                Debug.LogWarning("[Geometrydashcontroller] Death dissolve shader is not assigned or was stripped from build.");
             }
         }
     }
@@ -156,7 +160,6 @@ public class Geometrydashcontroller : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(2f);
 
-        ShowInterstitialOnDefeat();
         com.GameOver.SetActive(true);
         Time.timeScale = 0f;
     }
@@ -219,7 +222,7 @@ public class Geometrydashcontroller : MonoBehaviour
             yield break;
         }
 
-        Shader deathShader = Shader.Find("Custom/SpritePixelDisintegrate");
+        Shader deathShader = ResolveDeathShader();
         if (deathShader == null)
         {
             targetObject.SetActive(false);
@@ -293,17 +296,14 @@ public class Geometrydashcontroller : MonoBehaviour
         temporarilyHiddenKillers.Clear();
     }
 
-    private void ShowInterstitialOnDefeat()
+    private Shader ResolveDeathShader()
     {
-#if InterstitialAdv_yg
-        if (!YG2.nowAdsShow)
+        if (deathDissolveShader != null)
         {
-            Debug.Log("[Geometrydashcontroller] Showing interstitial ad on defeat.");
-            YG2.InterstitialAdvShow();
+            return deathDissolveShader;
         }
-#else
-        Debug.Log("[Geometrydashcontroller] InterstitialAdv module is not enabled in this build.");
-#endif
+
+        return Shader.Find("Custom/SpritePixelDisintegrate");
     }
 
     private void OnDestroy()
