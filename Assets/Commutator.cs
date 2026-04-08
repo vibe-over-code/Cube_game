@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class Commutator : MonoBehaviour
 {
@@ -14,6 +15,9 @@ public class Commutator : MonoBehaviour
     public TextMeshProUGUI YourText;
     public TextMeshProUGUI shopPointsText;
     public TextMeshProUGUI upgradeInfoText;
+    public RectTransform livesUiParent;
+    public Vector2 lifeHeartSize = new Vector2(72f, 72f);
+    public float lifeHeartSpacing = 76f;
 
     public GameObject GameOver;
     public GameObject Game;
@@ -25,8 +29,11 @@ public class Commutator : MonoBehaviour
     private LevelManager levelManager;
     private int points;
     private int extraLifeUpgradeLevel;
-    private int extraLivesRemaining;
+    private int livesRemaining;
     private float pointTimer;
+    private RectTransform livesContainer;
+    private readonly List<Image> lifeHeartImages = new List<Image>();
+    private Sprite generatedHeartSprite;
 
     void Start()
     {
@@ -34,7 +41,8 @@ public class Commutator : MonoBehaviour
         levelManager = GetComponent<LevelManager>();
         points = PlayerPrefs.GetInt(PointsKey, 0);
         extraLifeUpgradeLevel = PlayerPrefs.GetInt(ExtraLifeUpgradeLevelKey, 0);
-        extraLivesRemaining = GetExtraLivesForUpgradeLevel(extraLifeUpgradeLevel);
+        EnsureLivesUi();
+        RestoreExtraLives();
         RefreshShopUI();
         Time.timeScale = 1f;
     }
@@ -70,11 +78,13 @@ public class Commutator : MonoBehaviour
                 RefreshShopUI();
             }
         }
+
+        UpdateLifeHeartVisibility();
     }
 
     public void start()
     {
-        extraLivesRemaining = GetExtraLivesForUpgradeLevel(extraLifeUpgradeLevel);
+        RestoreExtraLives();
         pointTimer = 0f;
 
         if (Player != null)
@@ -140,27 +150,33 @@ public class Commutator : MonoBehaviour
 
         points -= cost;
         extraLifeUpgradeLevel = nextLevel;
-        extraLivesRemaining = GetExtraLivesForUpgradeLevel(extraLifeUpgradeLevel);
-
         PlayerPrefs.SetInt(PointsKey, points);
         PlayerPrefs.SetInt(ExtraLifeUpgradeLevelKey, extraLifeUpgradeLevel);
         PlayerPrefs.Save();
 
         Debug.Log("[Commutator] Bought extra life upgrade level: " + extraLifeUpgradeLevel);
+        RestoreExtraLives();
         RefreshShopUI();
     }
 
     public bool TryUseExtraLife()
     {
-        if (extraLivesRemaining <= 0)
+        if (livesRemaining <= 1)
         {
             return false;
         }
 
-        extraLivesRemaining--;
-        Debug.Log("[Commutator] Extra life used. Remaining: " + extraLivesRemaining);
-        RefreshShopUI();
+        livesRemaining--;
+        Debug.Log("[Commutator] Life used. Remaining: " + livesRemaining);
+        RefreshLifeHearts();
         return true;
+    }
+
+    public void RestoreExtraLives()
+    {
+        livesRemaining = GetTotalLivesForUpgradeLevel(extraLifeUpgradeLevel);
+        Debug.Log("[Commutator] Lives restored. Current: " + livesRemaining);
+        RefreshLifeHearts();
     }
 
     public void ReloadCurrentLevel()
@@ -184,24 +200,25 @@ public class Commutator : MonoBehaviour
     {
         if (shopPointsText != null)
         {
-            shopPointsText.text = "Points: " + points;
+            shopPointsText.text = points.ToString();
         }
 
-        if (upgradeInfoText == null)
+        if (upgradeInfoText != null)
         {
-            return;
+            if (extraLifeUpgradeLevel >= 2)
+            {
+                upgradeInfoText.text = "---";
+            }
+            else
+            {
+                int nextLevel = extraLifeUpgradeLevel + 1;
+                int cost = GetUpgradeCost(nextLevel);
+                int bonusLives = GetExtraLivesForUpgradeLevel(nextLevel);
+                upgradeInfoText.text = cost.ToString();
+            }
         }
 
-        if (extraLifeUpgradeLevel >= 2)
-        {
-            upgradeInfoText.text = "Extra Lives Lv.MAX (+2)";
-            return;
-        }
-
-        int nextLevel = extraLifeUpgradeLevel + 1;
-        int cost = GetUpgradeCost(nextLevel);
-        int bonusLives = GetExtraLivesForUpgradeLevel(nextLevel);
-        upgradeInfoText.text = "Upgrade Lives Lv." + nextLevel + " (+" + bonusLives + ") Cost: " + cost;
+        RefreshLifeHearts();
     }
 
     private int GetUpgradeCost(int level)
@@ -232,5 +249,198 @@ public class Commutator : MonoBehaviour
         }
 
         return 2;
+    }
+
+    private int GetTotalLivesForUpgradeLevel(int level)
+    {
+        return 1 + GetExtraLivesForUpgradeLevel(level);
+    }
+
+    private void EnsureLivesUi()
+    {
+        if (generatedHeartSprite == null)
+        {
+            generatedHeartSprite = CreateHeartSprite();
+        }
+
+        if (livesContainer != null)
+        {
+            return;
+        }
+
+        RectTransform parent = livesUiParent;
+        if (parent == null)
+        {
+            Canvas canvas = FindObjectOfType<Canvas>();
+            if (canvas != null)
+            {
+                parent = canvas.GetComponent<RectTransform>();
+            }
+        }
+
+        if (parent == null)
+        {
+            return;
+        }
+
+        GameObject containerObject = new GameObject("LivesUI", typeof(RectTransform));
+        livesContainer = containerObject.GetComponent<RectTransform>();
+        livesContainer.SetParent(parent, false);
+        livesContainer.anchorMin = new Vector2(0f, 1f);
+        livesContainer.anchorMax = new Vector2(0f, 1f);
+        livesContainer.pivot = new Vector2(0f, 1f);
+        livesContainer.anchoredPosition = new Vector2(22f, -22f);
+        livesContainer.sizeDelta = new Vector2(420f, 96f);
+    }
+
+    private void RefreshLifeHearts()
+    {
+        EnsureLivesUi();
+
+        if (livesContainer == null)
+        {
+            return;
+        }
+
+        for (int i = lifeHeartImages.Count - 1; i >= 0; i--)
+        {
+            if (lifeHeartImages[i] == null)
+            {
+                lifeHeartImages.RemoveAt(i);
+            }
+        }
+
+        while (lifeHeartImages.Count > livesRemaining)
+        {
+            Image image = lifeHeartImages[lifeHeartImages.Count - 1];
+            lifeHeartImages.RemoveAt(lifeHeartImages.Count - 1);
+
+            if (image != null)
+            {
+                Destroy(image.gameObject);
+            }
+        }
+
+        while (lifeHeartImages.Count < livesRemaining)
+        {
+            lifeHeartImages.Add(CreateHeartImage(lifeHeartImages.Count));
+        }
+
+        for (int i = 0; i < lifeHeartImages.Count; i++)
+        {
+            if (lifeHeartImages[i] == null)
+            {
+                continue;
+            }
+
+            RectTransform rect = lifeHeartImages[i].rectTransform;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(i * lifeHeartSpacing, 0f);
+            rect.sizeDelta = lifeHeartSize;
+            lifeHeartImages[i].enabled = IsGameplayRunning() && livesRemaining > 0;
+        }
+    }
+
+    private void UpdateLifeHeartVisibility()
+    {
+        bool shouldShow = IsGameplayRunning() && livesRemaining > 0;
+
+        for (int i = 0; i < lifeHeartImages.Count; i++)
+        {
+            if (lifeHeartImages[i] != null)
+            {
+                lifeHeartImages[i].enabled = shouldShow;
+            }
+        }
+    }
+
+    private Image CreateHeartImage(int index)
+    {
+        GameObject heartObject = new GameObject("LifeHeart_" + index, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        RectTransform rect = heartObject.GetComponent<RectTransform>();
+        rect.SetParent(livesContainer, false);
+
+        Image image = heartObject.GetComponent<Image>();
+        image.sprite = generatedHeartSprite;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        return image;
+    }
+
+    private Sprite CreateHeartSprite()
+    {
+        string[] pattern =
+        {
+            "..XX.XX..",
+            ".XXXXXXXX.",
+            "XXXXXXXXXX",
+            "XXXXXXXXXX",
+            ".XXXXXXXX.",
+            "..XXXXXX..",
+            "...XXXX...",
+            "....XX...."
+        };
+
+        int width = pattern[0].Length;
+        int height = pattern.Length;
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+
+        Color clear = new Color(0f, 0f, 0f, 0f);
+        Color dark = new Color32(92, 33, 140, 255);
+        Color mid = new Color32(164, 73, 255, 255);
+        Color light = new Color32(224, 170, 255, 255);
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                char pixel = pattern[height - 1 - y][x];
+                if (pixel != 'X')
+                {
+                    texture.SetPixel(x, y, clear);
+                    continue;
+                }
+
+                bool edge = x == 0 || x == width - 1 || y == 0 || y == height - 1
+                    || pattern[height - 1 - y][Mathf.Max(0, x - 1)] == '.'
+                    || pattern[height - 1 - y][Mathf.Min(width - 1, x + 1)] == '.';
+
+                if (edge)
+                {
+                    texture.SetPixel(x, y, dark);
+                }
+                else if (y > height / 2)
+                {
+                    texture.SetPixel(x, y, light);
+                }
+                else
+                {
+                    texture.SetPixel(x, y, mid);
+                }
+            }
+        }
+
+        texture.Apply();
+        texture.name = "GeneratedLifeHeart";
+
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, width, height),
+            new Vector2(0.5f, 0.5f),
+            8f
+        );
+    }
+
+    private void OnDestroy()
+    {
+        if (generatedHeartSprite != null)
+        {
+            Destroy(generatedHeartSprite.texture);
+            Destroy(generatedHeartSprite);
+        }
     }
 }

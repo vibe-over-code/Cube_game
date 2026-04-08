@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using YG;
 
 public class Geometrydashcontroller : MonoBehaviour
 {
@@ -155,6 +156,7 @@ public class Geometrydashcontroller : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(2f);
 
+        ShowInterstitialOnDefeat();
         com.GameOver.SetActive(true);
         Time.timeScale = 0f;
     }
@@ -289,6 +291,19 @@ public class Geometrydashcontroller : MonoBehaviour
         }
 
         temporarilyHiddenKillers.Clear();
+    }
+
+    private void ShowInterstitialOnDefeat()
+    {
+#if InterstitialAdv_yg
+        if (!YG2.nowAdsShow)
+        {
+            Debug.Log("[Geometrydashcontroller] Showing interstitial ad on defeat.");
+            YG2.InterstitialAdvShow();
+        }
+#else
+        Debug.Log("[Geometrydashcontroller] InterstitialAdv module is not enabled in this build.");
+#endif
     }
 
     private void OnDestroy()

@@ -185,6 +185,12 @@ public class LevelManager : MonoBehaviour
     {
         isTransitioning = true;
 
+        Commutator com = GetComponent<Commutator>();
+        if (com != null)
+        {
+            com.RestoreExtraLives();
+        }
+
         if (levelCompleteText != null)
         {
             levelCompleteText.text = levelCompleteMessage;
