@@ -11,15 +11,20 @@ public class Commutator : MonoBehaviour
 {
     private const string PointsKey = "PlayerPoints";
     private const string ExtraLifeUpgradeLevelKey = "ExtraLifeUpgradeLevel";
+    private const string TutorialCompletedKey = "TutorialCompleted";
+    private const int TutorialRequiredSpacePresses = 3;
 
     public float count;
 
     public TextMeshProUGUI YourText;
     public TextMeshProUGUI shopPointsText;
     public TextMeshProUGUI upgradeInfoText;
+    public TextMeshProUGUI tutorialText;
     public RectTransform livesUiParent;
     public Vector2 lifeHeartSize = new Vector2(72f, 72f);
     public float lifeHeartSpacing = 76f;
+    public float tutorialPulseInterval = 0.5f;
+    [TextArea(2, 4)] public string tutorialMessage = "Press SPACE to jump\nPress 3 times to continue";
 
     public GameObject GameOver;
     public GameObject Game;
@@ -39,6 +44,9 @@ public class Commutator : MonoBehaviour
     private bool pendingResetAfterAd;
     private Coroutine pendingResetRoutine;
     private float cachedAudioVolume = 1f;
+    private Coroutine tutorialPulseRoutine;
+    private bool isTutorialActive;
+    private int tutorialSpacePressCount;
 
     void Start()
     {
@@ -49,6 +57,7 @@ public class Commutator : MonoBehaviour
         EnsureLivesUi();
         RestoreExtraLives();
         RefreshShopUI();
+        InitializeTutorial();
         Time.timeScale = 1f;
     }
 
@@ -79,6 +88,8 @@ public class Commutator : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
+            HandleTutorialSpacePress();
+
             if (Menu.activeSelf)
             {
                 start();
@@ -362,6 +373,120 @@ public class Commutator : MonoBehaviour
         livesContainer.sizeDelta = new Vector2(420f, 96f);
     }
 
+    private void InitializeTutorial()
+    {
+        isTutorialActive = PlayerPrefs.GetInt(TutorialCompletedKey, 0) == 0;
+
+        if (!isTutorialActive)
+        {
+            SetTutorialVisible(false);
+            return;
+        }
+
+        EnsureTutorialText();
+
+        if (tutorialText == null)
+        {
+            return;
+        }
+
+        tutorialText.text = tutorialMessage;
+        tutorialSpacePressCount = 0;
+        SetTutorialVisible(true);
+
+        if (tutorialPulseRoutine != null)
+        {
+            StopCoroutine(tutorialPulseRoutine);
+        }
+
+        tutorialPulseRoutine = StartCoroutine(PulseTutorialText());
+    }
+
+    private void EnsureTutorialText()
+    {
+        if (tutorialText != null)
+        {
+            return;
+        }
+
+        Canvas canvas = FindObjectOfType<Canvas>();
+        if (canvas == null)
+        {
+            return;
+        }
+
+        GameObject tutorialObject = new GameObject("TutorialText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform rect = tutorialObject.GetComponent<RectTransform>();
+        rect.SetParent(canvas.transform, false);
+        rect.anchorMin = new Vector2(0.5f, 0.78f);
+        rect.anchorMax = new Vector2(0.5f, 0.78f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.sizeDelta = new Vector2(760f, 180f);
+
+        tutorialText = tutorialObject.GetComponent<TextMeshProUGUI>();
+        tutorialText.alignment = TextAlignmentOptions.Center;
+        tutorialText.fontSize = 48f;
+        tutorialText.color = Color.white;
+        tutorialText.raycastTarget = false;
+
+        if (TMP_Settings.defaultFontAsset != null)
+        {
+            tutorialText.font = TMP_Settings.defaultFontAsset;
+        }
+    }
+
+    private void HandleTutorialSpacePress()
+    {
+        if (!isTutorialActive)
+        {
+            return;
+        }
+
+        tutorialSpacePressCount++;
+
+        if (tutorialSpacePressCount < TutorialRequiredSpacePresses)
+        {
+            return;
+        }
+
+        CompleteTutorial();
+    }
+
+    private IEnumerator PulseTutorialText()
+    {
+        while (isTutorialActive)
+        {
+            SetTutorialVisible(true);
+            yield return new WaitForSecondsRealtime(tutorialPulseInterval);
+            SetTutorialVisible(false);
+            yield return new WaitForSecondsRealtime(tutorialPulseInterval);
+        }
+    }
+
+    private void CompleteTutorial()
+    {
+        isTutorialActive = false;
+        PlayerPrefs.SetInt(TutorialCompletedKey, 1);
+        PlayerPrefs.Save();
+
+        if (tutorialPulseRoutine != null)
+        {
+            StopCoroutine(tutorialPulseRoutine);
+            tutorialPulseRoutine = null;
+        }
+
+        SetTutorialVisible(false);
+    }
+
+    private void SetTutorialVisible(bool isVisible)
+    {
+        if (tutorialText != null)
+        {
+            tutorialText.gameObject.SetActive(isVisible);
+        }
+    }
+
     private void RefreshLifeHearts()
     {
         EnsureLivesUi();
@@ -510,6 +635,12 @@ public class Commutator : MonoBehaviour
         {
             StopCoroutine(pendingResetRoutine);
             pendingResetRoutine = null;
+        }
+
+        if (tutorialPulseRoutine != null)
+        {
+            StopCoroutine(tutorialPulseRoutine);
+            tutorialPulseRoutine = null;
         }
 
         AudioListener.volume = cachedAudioVolume;

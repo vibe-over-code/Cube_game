@@ -158,7 +158,7 @@ public class Geometrydashcontroller : MonoBehaviour
 
         enabled = false;
 
-        yield return new WaitForSecondsRealtime(2f);
+        yield return new WaitForSecondsRealtime(0.2f);
 
         com.GameOver.SetActive(true);
         Time.timeScale = 0f;
