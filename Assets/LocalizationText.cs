@@ -1,10 +1,10 @@
-using UnityEngine;
+п»їusing UnityEngine;
 using TMPro;
-using YG; // Подключаем плагин Яндекс Игр 2
+using YG;
 
 public class LocalizationText : MonoBehaviour
 {
-    [Header("Перевод")]
+    [Header("РџРµСЂРµРІРѕРґ")]
     [TextArea] public string russianText;
     [TextArea] public string englishText;
 
@@ -17,25 +17,41 @@ public class LocalizationText : MonoBehaviour
 
     private void OnEnable()
     {
-        // Подписываемся на событие смены языка (если оно есть в плагине) 
-        // или просто обновляем при включении объекта
+        YG2.onSwitchLang += HandleLanguageChanged;
+        YG2.onGetSDKData += HandleSDKDataReceived;
         UpdateLanguage();
+    }
+
+    private void OnDisable()
+    {
+        YG2.onSwitchLang -= HandleLanguageChanged;
+        YG2.onGetSDKData -= HandleSDKDataReceived;
     }
 
     public void UpdateLanguage()
     {
-        if (_textElement == null) return;
+        if (_textElement == null)
+        {
+            return;
+        }
 
-        // Проверяем язык через PluginYG2
-        // "ru" и "en" — стандартные коды Яндекса
         if (YG2.lang == "ru")
         {
             _textElement.text = russianText;
         }
         else
         {
-            // По умолчанию ставим английский для всех остальных стран
             _textElement.text = englishText;
         }
+    }
+
+    private void HandleLanguageChanged(string _)
+    {
+        UpdateLanguage();
+    }
+
+    private void HandleSDKDataReceived()
+    {
+        UpdateLanguage();
     }
 }

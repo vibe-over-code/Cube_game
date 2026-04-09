@@ -93,9 +93,9 @@ public class Commutator : MonoBehaviour
         {
             pointTimer += Time.deltaTime;
 
-            while (pointTimer >= 1f)
+            while (pointTimer >= 3f)
             {
-                pointTimer -= 1f;
+                pointTimer -= 3f;
                 points++;
                 PlayerPrefs.SetInt(PointsKey, points);
                 RefreshShopUI();
