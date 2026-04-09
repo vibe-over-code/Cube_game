@@ -12,6 +12,7 @@ public class Commutator : MonoBehaviour
     private const string PointsKey = "PlayerPoints";
     private const string ExtraLifeUpgradeLevelKey = "ExtraLifeUpgradeLevel";
     private const string TutorialCompletedKey = "TutorialCompleted";
+    private const string MusicMutedKey = "MusicMuted";
     private const int TutorialRequiredSpacePresses = 3;
 
     public float count;
@@ -20,11 +21,12 @@ public class Commutator : MonoBehaviour
     public TextMeshProUGUI shopPointsText;
     public TextMeshProUGUI upgradeInfoText;
     public TextMeshProUGUI tutorialText;
+    public Toggle musicToggle;
     public RectTransform livesUiParent;
     public Vector2 lifeHeartSize = new Vector2(72f, 72f);
     public float lifeHeartSpacing = 76f;
     public float tutorialPulseInterval = 0.5f;
-    [TextArea(2, 4)] public string tutorialMessage = "Press SPACE to jump\nPress 3 times to continue";
+    public AudioSource musicSource;
 
     public GameObject GameOver;
     public GameObject Game;
@@ -47,6 +49,7 @@ public class Commutator : MonoBehaviour
     private Coroutine tutorialPulseRoutine;
     private bool isTutorialActive;
     private int tutorialSpacePressCount;
+    private bool isMusicMuted;
 
     void Start()
     {
@@ -54,10 +57,12 @@ public class Commutator : MonoBehaviour
         levelManager = GetComponent<LevelManager>();
         points = PlayerPrefs.GetInt(PointsKey, 0);
         extraLifeUpgradeLevel = PlayerPrefs.GetInt(ExtraLifeUpgradeLevelKey, 0);
+        isMusicMuted = PlayerPrefs.GetInt(MusicMutedKey, 0) == 1;
         EnsureLivesUi();
         RestoreExtraLives();
         RefreshShopUI();
         InitializeTutorial();
+        InitializeMusicToggle();
         Time.timeScale = 1f;
     }
 
@@ -79,7 +84,7 @@ public class Commutator : MonoBehaviour
 
     void Update()
     {
-        ClearMenuSelection();
+        ClearUiSelection();
 
         if (YourText != null)
         {
@@ -373,24 +378,71 @@ public class Commutator : MonoBehaviour
         livesContainer.sizeDelta = new Vector2(420f, 96f);
     }
 
+    private void InitializeMusicToggle()
+    {
+        ResolveMusicSource();
+
+        if (musicToggle != null)
+        {
+            musicToggle.onValueChanged.RemoveListener(HandleMusicToggleChanged);
+            musicToggle.isOn = !isMusicMuted;
+            musicToggle.onValueChanged.AddListener(HandleMusicToggleChanged);
+        }
+
+        ApplyMusicState();
+    }
+
+    private void ResolveMusicSource()
+    {
+        if (musicSource != null)
+        {
+            return;
+        }
+
+        AudioSource[] allAudioSources = FindObjectsOfType<AudioSource>();
+        for (int i = 0; i < allAudioSources.Length; i++)
+        {
+            AudioSource candidate = allAudioSources[i];
+            if (candidate == null || candidate == audio)
+            {
+                continue;
+            }
+
+            if (candidate.loop)
+            {
+                musicSource = candidate;
+                return;
+            }
+        }
+    }
+
+    private void HandleMusicToggleChanged(bool isOn)
+    {
+        isMusicMuted = !isOn;
+        PlayerPrefs.SetInt(MusicMutedKey, isMusicMuted ? 1 : 0);
+        PlayerPrefs.Save();
+        ApplyMusicState();
+    }
+
+    private void ApplyMusicState()
+    {
+        ResolveMusicSource();
+
+        if (musicSource != null)
+        {
+            musicSource.mute = isMusicMuted;
+        }
+    }
+
     private void InitializeTutorial()
     {
         isTutorialActive = PlayerPrefs.GetInt(TutorialCompletedKey, 0) == 0;
 
-        if (!isTutorialActive)
+        if (!isTutorialActive || tutorialText == null)
         {
             SetTutorialVisible(false);
             return;
         }
-
-        EnsureTutorialText();
-
-        if (tutorialText == null)
-        {
-            return;
-        }
-
-        tutorialText.text = tutorialMessage;
         tutorialSpacePressCount = 0;
         SetTutorialVisible(true);
 
@@ -400,40 +452,6 @@ public class Commutator : MonoBehaviour
         }
 
         tutorialPulseRoutine = StartCoroutine(PulseTutorialText());
-    }
-
-    private void EnsureTutorialText()
-    {
-        if (tutorialText != null)
-        {
-            return;
-        }
-
-        Canvas canvas = FindObjectOfType<Canvas>();
-        if (canvas == null)
-        {
-            return;
-        }
-
-        GameObject tutorialObject = new GameObject("TutorialText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        RectTransform rect = tutorialObject.GetComponent<RectTransform>();
-        rect.SetParent(canvas.transform, false);
-        rect.anchorMin = new Vector2(0.5f, 0.78f);
-        rect.anchorMax = new Vector2(0.5f, 0.78f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(760f, 180f);
-
-        tutorialText = tutorialObject.GetComponent<TextMeshProUGUI>();
-        tutorialText.alignment = TextAlignmentOptions.Center;
-        tutorialText.fontSize = 48f;
-        tutorialText.color = Color.white;
-        tutorialText.raycastTarget = false;
-
-        if (TMP_Settings.defaultFontAsset != null)
-        {
-            tutorialText.font = TMP_Settings.defaultFontAsset;
-        }
     }
 
     private void HandleTutorialSpacePress()
@@ -665,13 +683,8 @@ public class Commutator : MonoBehaviour
         CompleteReset();
     }
 
-    private void ClearMenuSelection()
+    private void ClearUiSelection()
     {
-        if (Menu == null || !Menu.activeSelf)
-        {
-            return;
-        }
-
         if (EventSystem.current == null)
         {
             return;
