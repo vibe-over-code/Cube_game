@@ -44,7 +44,6 @@ public class Commutator : MonoBehaviour
     private readonly List<Image> lifeHeartImages = new List<Image>();
     private Sprite generatedHeartSprite;
     private bool pendingResetAfterAd;
-    private Coroutine pendingResetRoutine;
     private float cachedAudioVolume = 1f;
     private Coroutine tutorialPulseRoutine;
     private bool isTutorialActive;
@@ -160,49 +159,30 @@ public class Commutator : MonoBehaviour
         Debug.Log("[Commutator] Reset scene.");
 
 #if InterstitialAdv_yg
-        if (pendingResetRoutine != null || pendingResetAfterAd)
+        if (pendingResetAfterAd)
         {
             return;
         }
 
-        pendingResetRoutine = StartCoroutine(ResetWithInterstitialAttempt());
-        return;
-#endif
-
-        CompleteReset();
-    }
-
-#if InterstitialAdv_yg
-    private IEnumerator ResetWithInterstitialAttempt()
-    {
-        float waitDeadline = Time.realtimeSinceStartup + 1f;
-
-        while (Time.realtimeSinceStartup < waitDeadline)
+        if (!YG2.nowAdsShow && YG2.isTimerAdvCompleted)
         {
-            if (!YG2.nowAdsShow && YG2.isTimerAdvCompleted)
-            {
-                pendingResetAfterAd = true;
-                cachedAudioVolume = AudioListener.volume;
-                AudioListener.volume = 0f;
-                Debug.Log("[Commutator] Showing interstitial ad on reset.");
-                YG2.InterstitialAdvShow();
-                pendingResetRoutine = null;
-                yield break;
-            }
-
-            yield return null;
+            pendingResetAfterAd = true;
+            cachedAudioVolume = AudioListener.volume;
+            AudioListener.volume = 0f;
+            Debug.Log("[Commutator] Showing interstitial ad on reset.");
+            YG2.InterstitialAdvShow();
+            return;
         }
 
-        Debug.Log("[Commutator] Interstitial ad was not ready within 1 second. Resetting immediately.");
-        pendingResetRoutine = null;
+        Debug.Log("[Commutator] Interstitial ad is not ready. Resetting immediately.");
+#endif
+
         CompleteReset();
     }
-#endif
 
     private void CompleteReset()
     {
         pendingResetAfterAd = false;
-        pendingResetRoutine = null;
         AudioListener.volume = cachedAudioVolume;
         SceneManager.LoadScene(0);
         Time.timeScale = 1f;
@@ -649,12 +629,6 @@ public class Commutator : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (pendingResetRoutine != null)
-        {
-            StopCoroutine(pendingResetRoutine);
-            pendingResetRoutine = null;
-        }
-
         if (tutorialPulseRoutine != null)
         {
             StopCoroutine(tutorialPulseRoutine);
@@ -672,7 +646,6 @@ public class Commutator : MonoBehaviour
 
     private void HandleInterstitialClosed()
     {
-        pendingResetRoutine = null;
         AudioListener.volume = cachedAudioVolume;
 
         if (!pendingResetAfterAd)

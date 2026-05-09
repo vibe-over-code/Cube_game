@@ -43,7 +43,7 @@ namespace YG
         {
             while (true)
             {
-                yield return new WaitForSeconds(1.0f);
+                yield return null;
 
                 if (YG2.isTimerAdvCompleted && !YG2.nowAdsShow)
                 {
@@ -64,31 +64,17 @@ namespace YG
 
         IEnumerator TimerAdShow()
         {
-            while (true)
-            {
-                if (objSecCounter < secondObjects.Length)
-                {
-                    for (int i2 = 0; i2 < secondObjects.Length; i2++)
-                        secondObjects[i2].SetActive(false);
+            for (int i2 = 0; i2 < secondObjects.Length; i2++)
+                secondObjects[i2].SetActive(false);
 
-                    secondObjects[objSecCounter].SetActive(true);
-                    objSecCounter++;
+            objSecCounter = secondObjects.Length;
+            YG2.InterstitialAdvShow();
+            backupTimerClosureCoroutine = StartCoroutine(BackupTimerClosure());
 
-                    yield return new WaitForSecondsRealtime(1.0f);
-                }
+            while (!YG2.nowInterAdv)
+                yield return null;
 
-                if (objSecCounter == secondObjects.Length)
-                {
-                    YG2.InterstitialAdvShow();
-                    backupTimerClosureCoroutine = StartCoroutine(BackupTimerClosure());
-
-                    while (!YG2.nowInterAdv)
-                        yield return null;
-
-                    RestartTimer();
-                    yield break;
-                }
-            }
+            RestartTimer();
         }
 
         IEnumerator BackupTimerClosure()
